@@ -1,39 +1,48 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 
 st.title("Medication Adherence Predictor")
-st.markdown("This app predicts if a patient will adhere to their medication.")
+st.markdown("This app predicts if a patient will adhere to their medication using a model trained on synthetic data.")
 
-# Load dataset
+# ✅ Generate synthetic dataset
 @st.cache_data
-def load_data():
-    try:
-        data = pd.read_csv("patient_adherence_dataset.csv")
-        return data
-    except FileNotFoundError:
-        st.error("Dataset not found! Please upload patient_adherence_dataset.csv in the same folder.")
-        st.stop()
+def create_data(n=500):
+    np.random.seed(42)
+    genders = ["Male", "Female", "Unknown"]
+    medications = ["Type1", "Type2"]
 
-data = load_data()
+    data = pd.DataFrame({
+        "Gender": np.random.choice(genders, n),
+        "Age": np.random.randint(18, 80, n),
+        "Medication_Type": np.random.choice(medications, n),
+        "Missed_Doses": np.random.randint(0, 10, n),
+        "Days_Since_Last_Visit": np.random.randint(0, 60, n),
+        "App_Usage": np.random.choice(["Yes", "No"], n),
+        "Adherence": np.random.choice([1, 0], n)  # 1 = Adherent, 0 = Non-Adherent
+    })
+    return data
 
-# Prepare data
-X = data.drop(columns=["Adherence"])
-y = data["Adherence"].apply(lambda x: 1 if x == "Adherent" else 0)
+data = create_data()
 
-# Train model
-@st.cache_resource
-def train_model(X, y):
+# ✅ Train model at runtime
+def train_model(data):
+    X = data[["Gender", "Age", "Medication_Type", "Missed_Doses", "Days_Since_Last_Visit", "App_Usage"]]
+    y = data["Adherence"]
+
+    X = pd.get_dummies(X, drop_first=True)  # One-hot encoding for categorical features
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
-    return model
+    return model, X.columns
 
-model = train_model(X, y)
+model, feature_cols = train_model(data)
 
-# Input fields
-st.subheader("Enter Patient Details")
+# ✅ User Input Form
+st.write("### Enter Patient Details")
 gender = st.selectbox("Gender", ["Male", "Female", "Unknown"])
 age = st.number_input("Age", min_value=0, max_value=120)
 medication_type = st.selectbox("Medication Type", ["Type1", "Type2"])
@@ -41,14 +50,19 @@ missed_doses = st.number_input("Missed Doses", min_value=0)
 last_visit_gap = st.number_input("Days since Last Visit", min_value=0)
 app_usage = st.selectbox("App Usage", ["Yes", "No"])
 
-# Encode inputs
-gender_encoded = 0 if gender == "Male" else (1 if gender == "Female" else 2)
-medication_encoded = 0 if medication_type == "Type1" else 1
-app_usage_encoded = 1 if app_usage == "Yes" else 0
+# ✅ Prepare input for prediction
+input_data = pd.DataFrame({
+    "Gender": [gender],
+    "Age": [age],
+    "Medication_Type": [medication_type],
+    "Missed_Doses": [missed_doses],
+    "Days_Since_Last_Visit": [last_visit_gap],
+    "App_Usage": [app_usage]
+})
 
-# Make prediction
-features = [[gender_encoded, age, medication_encoded, missed_doses, last_visit_gap, app_usage_encoded]]
+input_data = pd.get_dummies(input_data)
+input_data = input_data.reindex(columns=feature_cols, fill_value=0)
 
 if st.button("Predict"):
-    prediction = model.predict(features)[0]
-    st.success("Adherent ✅" if prediction == 1 else "Non-Adherent ❌")
+    prediction = model.predict(input_data)[0]
+    st.success("Prediction: Adherent" if prediction == 1 else "Prediction: Non-Adherent")
