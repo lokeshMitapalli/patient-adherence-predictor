@@ -1,48 +1,41 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
+from twilio.rest import Client
 
-st.title("Medication Adherence Predictor")
-st.markdown("This app predicts if a patient will adhere to their medication using a model trained on synthetic data.")
+st.title("Medication Adherence Predictor with SMS Alerts")
 
-# ✅ Generate synthetic dataset
+# ✅ Load dataset
 @st.cache_data
-def create_data(n=500):
-    np.random.seed(42)
-    genders = ["Male", "Female", "Unknown"]
-    medications = ["Type1", "Type2"]
+def load_data():
+    try:
+        data = pd.read_csv("patient_adherence_dataset.csv")
+        return data
+    except FileNotFoundError:
+        st.error("Dataset not found! Please upload patient_adherence_dataset.csv in the same folder.")
+        st.stop()
 
-    data = pd.DataFrame({
-        "Gender": np.random.choice(genders, n),
-        "Age": np.random.randint(18, 80, n),
-        "Medication_Type": np.random.choice(medications, n),
-        "Missed_Doses": np.random.randint(0, 10, n),
-        "Days_Since_Last_Visit": np.random.randint(0, 60, n),
-        "App_Usage": np.random.choice(["Yes", "No"], n),
-        "Adherence": np.random.choice([1, 0], n)  # 1 = Adherent, 0 = Non-Adherent
-    })
-    return data
+data = load_data()
 
-data = create_data()
+# ✅ Preprocess dataset
+X = data.drop(columns=["Adherence"])
+y = data["Adherence"].apply(lambda x: 1 if x == "Adherent" else 0)
 
-# ✅ Train model at runtime
-def train_model(data):
-    X = data[["Gender", "Age", "Medication_Type", "Missed_Doses", "Days_Since_Last_Visit", "App_Usage"]]
-    y = data["Adherence"]
+X = pd.get_dummies(X, drop_first=True)
 
-    X = pd.get_dummies(X, drop_first=True)  # One-hot encoding for categorical features
+# ✅ Train model
+@st.cache_resource
+def train_model(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
     return model, X.columns
 
-model, feature_cols = train_model(data)
+model, feature_cols = train_model(X, y)
 
 # ✅ User Input Form
-st.write("### Enter Patient Details")
+st.subheader("Enter Patient Details")
 gender = st.selectbox("Gender", ["Male", "Female", "Unknown"])
 age = st.number_input("Age", min_value=0, max_value=120)
 medication_type = st.selectbox("Medication Type", ["Type1", "Type2"])
@@ -63,6 +56,29 @@ input_data = pd.DataFrame({
 input_data = pd.get_dummies(input_data)
 input_data = input_data.reindex(columns=feature_cols, fill_value=0)
 
+# ✅ Predict and Show Result
 if st.button("Predict"):
     prediction = model.predict(input_data)[0]
-    st.success("Prediction: Adherent" if prediction == 1 else "Prediction: Non-Adherent")
+    if prediction == 1:
+        st.success("Prediction: Adherent ✅")
+    else:
+        st.error("Prediction: Non-Adherent ❌")
+
+        # ✅ SMS Notification Section
+        st.subheader("Send SMS Notification")
+        phone_number = st.text_input("Enter patient's phone number (e.g., +91XXXXXXXXXX)")
+        if st.button("Send SMS Reminder"):
+            if phone_number:
+                # ✅ Twilio Credentials
+                account_sid = "YOUR_TWILIO_ACCOUNT_SID"
+                auth_token = "YOUR_TWILIO_AUTH_TOKEN"
+                client = Client(account_sid, auth_token)
+
+                message = client.messages.create(
+                    body="Reminder: Please take your medication on time!",
+                    from_="+1XXXXXXXXXX",  # Your Twilio number
+                    to=phone_number
+                )
+                st.success(f"SMS sent successfully! SID: {message.sid}")
+            else:
+                st.warning("Please enter a phone number.")
