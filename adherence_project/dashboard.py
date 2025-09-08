@@ -10,7 +10,7 @@ st.title("Medication Adherence Predictor with SMS Alerts")
 @st.cache_data
 def load_data():
     try:
-        data = pd.read_csv("patient_adherence_dataset.csv")
+        data = pd.read_csv("adherence_project/patient_adherence_dataset.csv")
         return data
     except FileNotFoundError:
         st.error("Dataset not found! Please upload patient_adherence_dataset.csv in the same folder.")
