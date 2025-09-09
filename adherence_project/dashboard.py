@@ -33,6 +33,20 @@ def show_toast(message, color="green"):
     """
     st.markdown(toast_html, unsafe_allow_html=True)
 
+# === HELPER: Encode categorical columns ===
+def encode_dataframe(df):
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col] = df[col].astype('category').cat.codes
+    return df
+
+# === HELPER: Check missing dosages / non-adherence ===
+def check_missing_dosage(df):
+    alerts = df[(df["Predicted_Adherence"] == "Non-Adherent") |
+                (df.get("Dosage_mg", 1) == 0) |
+                (df.get("Follow_Up_Days", 1).isna())]
+    return alerts
+
 # === MODEL LOADING ===
 model = None
 model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
@@ -100,13 +114,6 @@ else:
 
 X = data.drop(columns=["Adherence"], errors='ignore')
 
-# === HELPER: Encode categorical columns ===
-def encode_dataframe(df):
-    for col in df.columns:
-        if df[col].dtype == 'object':
-            df[col] = df[col].astype('category').cat.codes
-    return df
-
 # === SINGLE PREDICTION ===
 st.sidebar.header("Make a Single Prediction")
 input_data = {}
@@ -162,6 +169,16 @@ if st.button("Run Batch Prediction"):
         show_toast("✅ Batch prediction completed successfully!", color="green")
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
+
+        # Alerts for patients missing dosages or non-adherent
+        alerts = check_missing_dosage(data)
+        if not alerts.empty:
+            show_toast(f"⚠ {len(alerts)} patients missing doses or non-adherent!", color="orange")
+            st.warning("### Patients Needing Attention")
+            st.dataframe(alerts)
+        else:
+            show_toast("✅ All patients are adherent!", color="green")
+            st.success("All patients are adherent and up-to-date on dosages!")
 
         # Download full predictions
         buffer = BytesIO()
