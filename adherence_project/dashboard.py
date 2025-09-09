@@ -42,9 +42,15 @@ def encode_dataframe(df):
 
 # === HELPER: Check missing dosages / non-adherence ===
 def check_missing_dosage(df):
+    # Ensure Follow_Up_Days exists as a Series
+    follow_up = df["Follow_Up_Days"] if "Follow_Up_Days" in df.columns else pd.Series([None]*len(df))
+    
+    # Ensure Dosage_mg exists as a Series
+    dosage = df["Dosage_mg"] if "Dosage_mg" in df.columns else pd.Series([0]*len(df))
+    
     alerts = df[(df["Predicted_Adherence"] == "Non-Adherent") |
-                (df.get("Dosage_mg", 1) == 0) |
-                (df.get("Follow_Up_Days", 1).isna())]
+                (dosage == 0) |
+                (follow_up.isna())]
     return alerts
 
 # === MODEL LOADING ===
