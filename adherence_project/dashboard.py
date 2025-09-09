@@ -1,93 +1,61 @@
 import streamlit as st
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from twilio.rest import Client
+import pickle
+import os
 
-st.title("Medication Adherence Predictor (Default Dataset + File Upload + SMS)")
+# Load the trained model
+model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
+with open(model_path, 'rb') as f:
+    model = pickle.load(f)
 
-# ✅ File upload option
-uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=["csv"])
+st.title("Patient Adherence Prediction Dashboard")
 
-# ✅ Load dataset (default or uploaded)
-if uploaded_file is not None:
+# Option to upload dataset
+st.sidebar.header("Upload Your Dataset (CSV)")
+uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
+
+if uploaded_file:
     data = pd.read_csv(uploaded_file)
-    st.info("Using uploaded dataset.")
+    st.write("### Uploaded Dataset Preview")
+    st.dataframe(data.head())
 else:
-    st.warning("No file uploaded. Using default dataset: patient_adherence_dataset.csv")
-    try:
-        data = pd.read_csv("patient_adherence_dataset.csv")
-    except FileNotFoundError:
-        st.error("Default dataset not found! Please upload a CSV file.")
-        st.stop()
+    default_path = os.path.join(os.path.dirname(__file__), 'patient_adherence_dataset.csv')
+    data = pd.read_csv(default_path)
+    st.write("### Default Dataset Preview")
+    st.dataframe(data.head())
 
-# ✅ Display dataset preview
-st.write("### Dataset Preview:")
-st.dataframe(data.head())
-
-# ✅ Validate dataset
-if "Adherence" not in data.columns:
-    st.error("Dataset must contain an 'Adherence' column.")
+# Handle Adherence column safely
+if "Adherence" in data.columns:
+    y = data["Adherence"].fillna("").apply(lambda x: 1 if str(x).strip().lower() == "adherent" else 0)
+else:
+    st.error("The dataset must contain an 'Adherence' column.")
     st.stop()
 
-# ✅ Preprocessing
-X = data.drop(columns=["Adherence"])
-y = data["Adherence"].apply(lambda x: 1 if x.strip().lower() == "adherent" else 0)
-X = pd.get_dummies(X, drop_first=True)
+# Get feature columns (exclude Adherence)
+X = data.drop(columns=["Adherence"], errors='ignore')
 
-# ✅ Train model
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+# Prediction section
+st.sidebar.header("Make a Prediction")
+input_data = {}
+for col in X.columns:
+    value = st.sidebar.text_input(f"Enter {col}")
+    input_data[col] = value
 
-st.success("Model trained successfully!")
+if st.sidebar.button("Predict"):
+    try:
+        # Convert to DataFrame
+        input_df = pd.DataFrame([input_data])
 
-# ✅ Patient details input
-st.subheader("Enter Patient Details")
-gender = st.selectbox("Gender", ["Male", "Female", "Unknown"])
-age = st.number_input("Age", min_value=0, max_value=120)
-medication_type = st.selectbox("Medication Type", ["Type1", "Type2"])
-missed_doses = st.number_input("Missed Doses", min_value=0)
-last_visit_gap = st.number_input("Days since Last Visit", min_value=0)
-app_usage = st.selectbox("App Usage", ["Yes", "No"])
+        # Match column types with training data
+        for col in input_df.columns:
+            try:
+                input_df[col] = pd.to_numeric(input_df[col])
+            except:
+                pass
 
-# ✅ Prepare input data for prediction
-input_data = pd.DataFrame({
-    "Gender": [gender],
-    "Age": [age],
-    "Medication_Type": [medication_type],
-    "Missed_Doses": [missed_doses],
-    "Days_Since_Last_Visit": [last_visit_gap],
-    "App_Usage": [app_usage]
-})
+        prediction = model.predict(input_df)[0]
+        result = "Adherent" if prediction == 1 else "Non-Adherent"
+        st.success(f"Prediction: {result}")
+    except Exception as e:
+        st.error(f"Error during prediction: {e}")
 
-input_data = pd.get_dummies(input_data)
-input_data = input_data.reindex(columns=X.columns, fill_value=0)
-
-# ✅ Prediction
-if st.button("Predict"):
-    prediction = model.predict(input_data)[0]
-    if prediction == 1:
-        st.success("Prediction: Adherent ✅")
-    else:
-        st.error("Prediction: Non-Adherent ❌")
-
-        # ✅ SMS Notification
-        phone_number = st.text_input("Enter patient's phone number (e.g., +91XXXXXXXXXX)")
-        if st.button("Send SMS Reminder"):
-            if phone_number:
-                try:
-                    account_sid = "YOUR_TWILIO_SID"
-                    auth_token = "YOUR_TWILIO_AUTH_TOKEN"
-                    client = Client(account_sid, auth_token)
-
-                    message = client.messages.create(
-                        body="Reminder: Please take your medication on time!",
-                        from_="+1XXXXXXXXXX",  # Replace with Twilio phone number
-                        to=phone_number
-                    )
-                    st.success(f"SMS sent successfully! SID: {message.sid}")
-                except Exception as e:
-                    st.error(f"Failed to send SMS: {e}")
-            else:
-                st.warning("Please enter a valid phone number.")
