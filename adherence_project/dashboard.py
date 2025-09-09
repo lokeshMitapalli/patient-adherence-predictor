@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from joblib import load
 import pickle
+from io import BytesIO
 
 st.title("Patient Adherence Prediction Dashboard")
 
@@ -66,8 +67,8 @@ else:
 # Features
 X = data.drop(columns=["Adherence"], errors='ignore')
 
-# === PREDICTION UI ===
-st.sidebar.header("Make a Prediction")
+# === SINGLE PREDICTION ===
+st.sidebar.header("Make a Single Prediction")
 input_data = {}
 for col in X.columns:
     value = st.sidebar.text_input(f"Enter {col}")
@@ -89,6 +90,31 @@ if st.sidebar.button("Predict"):
         st.success(f"Prediction: {result}")
     except Exception as e:
         st.error(f"Error during prediction: {e}")
+
+# === BATCH PREDICTION ===
+st.subheader("Batch Prediction on Uploaded Dataset")
+if st.button("Run Batch Prediction"):
+    try:
+        X_copy = X.copy()
+        preds = model.predict(X_copy)
+        data["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
+        st.write("### Dataset with Predictions")
+        st.dataframe(data.head())
+
+        # Prepare file for download
+        buffer = BytesIO()
+        data.to_csv(buffer, index=False)
+        buffer.seek(0)
+
+        st.download_button(
+            label="Download Predictions as CSV",
+            data=buffer,
+            file_name="patient_predictions.csv",
+            mime="text/csv"
+        )
+    except Exception as e:
+        st.error(f"Error during batch prediction: {e}")
+
 
 
 
