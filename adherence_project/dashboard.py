@@ -1,14 +1,22 @@
 import streamlit as st
 import pandas as pd
-import pickle
 import os
-
-# Load the trained model
-model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
-with open(model_path, 'rb') as f:
-    model = pickle.load(f)
+from joblib import load
 
 st.title("Patient Adherence Prediction Dashboard")
+
+# Load the trained model safely
+model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
+
+if not os.path.exists(model_path):
+    st.error("Model file 'model.pkl' not found. Please upload it to the project folder and restart the app.")
+    st.stop()
+
+try:
+    model = load(model_path)
+except Exception as e:
+    st.error(f"Error loading model: {e}")
+    st.stop()
 
 # Option to upload dataset
 st.sidebar.header("Upload Your Dataset (CSV)")
@@ -20,21 +28,25 @@ if uploaded_file:
     st.dataframe(data.head())
 else:
     default_path = os.path.join(os.path.dirname(__file__), 'patient_adherence_dataset.csv')
-    data = pd.read_csv(default_path)
-    st.write("### Default Dataset Preview")
-    st.dataframe(data.head())
+    if os.path.exists(default_path):
+        data = pd.read_csv(default_path)
+        st.write("### Default Dataset Preview")
+        st.dataframe(data.head())
+    else:
+        st.error("Default dataset file not found. Please upload a dataset.")
+        st.stop()
 
-# Handle Adherence column safely
+# Check if 'Adherence' column exists
 if "Adherence" in data.columns:
     y = data["Adherence"].fillna("").apply(lambda x: 1 if str(x).strip().lower() == "adherent" else 0)
 else:
-    st.error("The dataset must contain an 'Adherence' column.")
-    st.stop()
+    st.warning("The dataset does not contain an 'Adherence' column. Predictions will be based on features only.")
+    y = None
 
-# Get feature columns (exclude Adherence)
+# Get feature columns (exclude Adherence if present)
 X = data.drop(columns=["Adherence"], errors='ignore')
 
-# Prediction section
+# Sidebar inputs for prediction
 st.sidebar.header("Make a Prediction")
 input_data = {}
 for col in X.columns:
@@ -46,7 +58,7 @@ if st.sidebar.button("Predict"):
         # Convert to DataFrame
         input_df = pd.DataFrame([input_data])
 
-        # Match column types with training data
+        # Convert columns to numeric where possible
         for col in input_df.columns:
             try:
                 input_df[col] = pd.to_numeric(input_df[col])
@@ -58,4 +70,5 @@ if st.sidebar.button("Predict"):
         st.success(f"Prediction: {result}")
     except Exception as e:
         st.error(f"Error during prediction: {e}")
+
 
