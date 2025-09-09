@@ -7,6 +7,32 @@ from io import BytesIO
 
 st.title("Patient Adherence Prediction Dashboard")
 
+# === HELPER: Toast Notifications ===
+def show_toast(message, color="green"):
+    toast_html = f"""
+    <div style="
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: {color};
+        color: white;
+        padding: 15px 20px;
+        border-radius: 10px;
+        font-size: 16px;
+        z-index: 9999;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    ">
+        {message}
+    </div>
+    <script>
+        setTimeout(function(){{
+            var toasts = document.querySelectorAll('[style*="position: fixed; bottom: 20px;"]');
+            toasts.forEach(function(toast){{ toast.style.display = 'none'; }});
+        }}, 3000);
+    </script>
+    """
+    st.markdown(toast_html, unsafe_allow_html=True)
+
 # === MODEL LOADING ===
 model = None
 model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
@@ -15,11 +41,14 @@ if os.path.exists(model_path):
     st.info("Loading model from project folder...")
     try:
         model = load(model_path)
+        show_toast("✅ Model loaded successfully!", color="green")
     except:
         try:
             with open(model_path, 'rb') as f:
                 model = pickle.load(f)
+                show_toast("✅ Model loaded successfully!", color="green")
         except Exception as e:
+            show_toast("❌ Error loading model!", color="red")
             st.error(f"Error loading model: {e}")
             model = None
 
@@ -29,22 +58,26 @@ if model is None:
     if uploaded_model:
         try:
             model = load(uploaded_model)
+            show_toast("✅ Model uploaded successfully!", color="green")
         except:
             try:
                 model = pickle.load(uploaded_model)
+                show_toast("✅ Model uploaded successfully!", color="green")
             except Exception as e:
+                show_toast("❌ Error loading uploaded model!", color="red")
                 st.error(f"Error loading uploaded model: {e}")
                 model = None
 
 if model is None:
     st.stop()
 
-# === DATASET LOADING ===
+# === DATASET UPLOAD ===
 st.sidebar.header("Upload Your Dataset (CSV)")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
 
 if uploaded_file:
     data = pd.read_csv(uploaded_file)
+    show_toast("✅ Dataset uploaded successfully!", color="green")
     st.write("### Uploaded Dataset Preview")
     st.dataframe(data.head())
 else:
@@ -54,6 +87,7 @@ else:
         st.write("### Default Dataset Preview")
         st.dataframe(data.head())
     else:
+        show_toast("❌ No dataset found!", color="red")
         st.error("No dataset found. Please upload a CSV file to continue.")
         st.stop()
 
@@ -66,7 +100,7 @@ else:
 
 X = data.drop(columns=["Adherence"], errors='ignore')
 
-# === HELPER: ENCODE CATEGORICALS ===
+# === HELPER: Encode categorical columns ===
 def encode_dataframe(df):
     for col in df.columns:
         if df[col].dtype == 'object':
@@ -83,8 +117,6 @@ for col in X.columns:
 if st.sidebar.button("Predict"):
     try:
         input_df = pd.DataFrame([input_data])
-
-        # Encode categorical values
         input_df = encode_dataframe(input_df)
 
         # Convert numeric fields
@@ -103,20 +135,21 @@ if st.sidebar.button("Predict"):
 
         prediction = model.predict(input_df)[0]
         result = "Adherent" if prediction == 1 else "Non-Adherent"
+        show_toast(f"✅ Single prediction: {result}", color="green")
         st.success(f"Prediction: {result}")
     except Exception as e:
+        show_toast("❌ Error during single prediction!", color="red")
         st.error(f"Error during prediction: {e}")
 
 # === BATCH PREDICTION ===
 st.subheader("Batch Prediction on Uploaded Dataset")
 if st.button("Run Batch Prediction"):
     try:
-        X_copy = X.copy()
+        show_toast("Running batch prediction...", color="#007bff")
 
-        # Encode categorical columns automatically
+        X_copy = X.copy()
         X_copy = encode_dataframe(X_copy)
 
-        # Align columns with model
         trained_features = model.feature_names_in_
         for col in trained_features:
             if col not in X_copy.columns:
@@ -125,10 +158,12 @@ if st.button("Run Batch Prediction"):
 
         preds = model.predict(X_copy)
         data["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
-        st.write("### Dataset with Predictions")
-        st.dataframe(data.head())
 
-        # Prepare file for download
+        show_toast("✅ Batch prediction completed successfully!", color="green")
+        st.write("### Full Dataset with Predictions")
+        st.dataframe(data)
+
+        # Download full predictions
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
         buffer.seek(0)
@@ -140,10 +175,5 @@ if st.button("Run Batch Prediction"):
             mime="text/csv"
         )
     except Exception as e:
+        show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
-
-
-
-
-
-
