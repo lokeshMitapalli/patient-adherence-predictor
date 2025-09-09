@@ -85,6 +85,13 @@ if st.sidebar.button("Predict"):
             except:
                 pass
 
+        # Align columns with model
+        trained_features = model.feature_names_in_
+        for col in trained_features:
+            if col not in input_df.columns:
+                input_df[col] = 0
+        input_df = input_df[trained_features]
+
         prediction = model.predict(input_df)[0]
         result = "Adherent" if prediction == 1 else "Non-Adherent"
         st.success(f"Prediction: {result}")
@@ -96,6 +103,14 @@ st.subheader("Batch Prediction on Uploaded Dataset")
 if st.button("Run Batch Prediction"):
     try:
         X_copy = X.copy()
+
+        # Align columns with model
+        trained_features = model.feature_names_in_
+        for col in trained_features:
+            if col not in X_copy.columns:
+                X_copy[col] = 0  # Add missing columns
+        X_copy = X_copy[trained_features]  # Keep only trained columns
+
         preds = model.predict(X_copy)
         data["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
         st.write("### Dataset with Predictions")
@@ -114,6 +129,7 @@ if st.button("Run Batch Prediction"):
         )
     except Exception as e:
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
