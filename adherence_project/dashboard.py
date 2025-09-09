@@ -64,8 +64,14 @@ else:
     st.warning("The dataset does not contain an 'Adherence' column. Predictions will be based on features only.")
     y = None
 
-# Features
 X = data.drop(columns=["Adherence"], errors='ignore')
+
+# === HELPER: ENCODE CATEGORICALS ===
+def encode_dataframe(df):
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col] = df[col].astype('category').cat.codes
+    return df
 
 # === SINGLE PREDICTION ===
 st.sidebar.header("Make a Single Prediction")
@@ -77,6 +83,9 @@ for col in X.columns:
 if st.sidebar.button("Predict"):
     try:
         input_df = pd.DataFrame([input_data])
+
+        # Encode categorical values
+        input_df = encode_dataframe(input_df)
 
         # Convert numeric fields
         for col in input_df.columns:
@@ -104,12 +113,15 @@ if st.button("Run Batch Prediction"):
     try:
         X_copy = X.copy()
 
+        # Encode categorical columns automatically
+        X_copy = encode_dataframe(X_copy)
+
         # Align columns with model
         trained_features = model.feature_names_in_
         for col in trained_features:
             if col not in X_copy.columns:
-                X_copy[col] = 0  # Add missing columns
-        X_copy = X_copy[trained_features]  # Keep only trained columns
+                X_copy[col] = 0
+        X_copy = X_copy[trained_features]
 
         preds = model.predict(X_copy)
         data["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
@@ -129,6 +141,7 @@ if st.button("Run Batch Prediction"):
         )
     except Exception as e:
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
