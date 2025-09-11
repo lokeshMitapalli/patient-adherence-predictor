@@ -6,7 +6,7 @@ from io import BytesIO
 
 st.title("Patient Adherence Prediction Dashboard")
 
-# === HELPERS ===
+# === HELPER: Toast Notifications ===
 def show_toast(message, color="green"):
     toast_html = f"""
     <div style="
@@ -20,7 +20,9 @@ def show_toast(message, color="green"):
         font-size: 16px;
         z-index: 9999;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    ">{message}</div>
+    ">
+        {message}
+    </div>
     <script>
         setTimeout(function(){{
             var toasts = document.querySelectorAll('[style*="position: fixed; bottom: 20px;"]');
@@ -30,128 +32,151 @@ def show_toast(message, color="green"):
     """
     st.markdown(toast_html, unsafe_allow_html=True)
 
+# === HELPER: Encode categorical columns ===
 def encode_dataframe(df):
     for col in df.columns:
-        if df[col].dtype == "object":
-            df[col] = df[col].astype("category").cat.codes
+        if df[col].dtype == 'object':
+            df[col] = df[col].astype('category').cat.codes
     return df
 
+# === HELPER: Check missing dosages / non-adherence ===
 def check_missing_dosage(df):
-    follow_up = df.get("Follow_Up_Days", pd.Series([None]*len(df)))
-    dosage = df.get("Dosage_mg", pd.Series([0]*len(df)))
+    follow_up = df["Follow_Up_Days"] if "Follow_Up_Days" in df.columns else pd.Series([None]*len(df))
+    dosage = df["Dosage_mg"] if "Dosage_mg" in df.columns else pd.Series([0]*len(df))
     alerts = df[(df["Predicted_Adherence"] == "Non-Adherent") |
-                (dosage == 0) | (follow_up.isna())]
+                (dosage == 0) |
+                (follow_up.isna())]
     return alerts
 
-def ensure_features(df, model):
-    trained_features = model.feature_names_in_
-    for col in trained_features:
-        if col not in df.columns:
-            df[col] = 0
-    return df[trained_features]
-
 # === MODEL LOADING ===
-model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
 model = None
+model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
 
 if os.path.exists(model_path):
     st.info("Loading model from project folder...")
     try:
-        model = load(model_path)   # ✅ Always use joblib.load
-        show_toast("✅ Model loaded successfully!", "green")
+        model = load(model_path)
+        model_name = model.__class__.__name__
+        show_toast(f"✅ Model loaded successfully! ({model_name})", "green")
+        st.success(f"Model loaded: **{model_name}** ✅")
     except Exception as e:
+        show_toast("❌ Error loading model!", "red")
         st.error(f"Error loading model: {e}")
 else:
-    st.warning("No model found. Please upload one.")
+    st.warning("No model found in project folder. Please upload one.")
     uploaded_model = st.file_uploader("Upload your model file (.pkl)", type=["pkl"])
     if uploaded_model:
         try:
             temp_path = "uploaded_model.pkl"
             with open(temp_path, "wb") as f:
                 f.write(uploaded_model.read())
-            model = load(temp_path)   # ✅ Reload with joblib
-            show_toast("✅ Model uploaded successfully!", "green")
+            model = load(temp_path)
+            model_name = model.__class__.__name__
+            show_toast(f"✅ Uploaded model loaded! ({model_name})", "green")
+            st.success(f"Model loaded: **{model_name}** ✅")
         except Exception as e:
+            show_toast("❌ Error loading uploaded model!", "red")
             st.error(f"Error loading uploaded model: {e}")
 
 if model is None:
     st.stop()
 
-# === DATASET LOADING ===
+# === DATASET UPLOAD ===
 st.sidebar.header("Upload Your Dataset (CSV)")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
 
 if uploaded_file:
     data = pd.read_csv(uploaded_file)
     show_toast("✅ Dataset uploaded successfully!", "green")
+    st.write("### Uploaded Dataset Preview")
+    st.dataframe(data.head())
 else:
-    default_path = os.path.join(os.path.dirname(__file__), "patient_adherence_dataset.csv")
+    default_path = os.path.join(os.path.dirname(__file__), 'patient_adherence_dataset.csv')
     if os.path.exists(default_path):
         data = pd.read_csv(default_path)
-        st.info("Using default dataset from project folder")
+        st.write("### Default Dataset Preview")
+        st.dataframe(data.head())
     else:
-        st.error("No dataset found. Please upload one to continue.")
+        show_toast("❌ No dataset found!", "red")
+        st.error("No dataset found. Please upload a CSV file to continue.")
         st.stop()
 
-st.write("### Dataset Preview")
-st.dataframe(data.head())
-
-# === TARGET / FEATURES ===
-y = None
+# === PROCESS DATA ===
 if "Adherence" in data.columns:
     y = data["Adherence"].fillna("").apply(lambda x: 1 if str(x).strip().lower() == "adherent" else 0)
-X = data.drop(columns=["Adherence"], errors="ignore")
+else:
+    st.warning("The dataset does not contain an 'Adherence' column. Predictions will be based on features only.")
+    y = None
+
+X = data.drop(columns=["Adherence"], errors='ignore')
 
 # === SINGLE PREDICTION ===
 st.sidebar.header("Make a Single Prediction")
-input_data = {col: st.sidebar.text_input(f"Enter {col}") for col in X.columns}
+input_data = {}
+for col in X.columns:
+    value = st.sidebar.text_input(f"Enter {col}")
+    input_data[col] = value
 
 if st.sidebar.button("Predict"):
     try:
         input_df = pd.DataFrame([input_data])
         input_df = encode_dataframe(input_df)
-
         for col in input_df.columns:
-            input_df[col] = pd.to_numeric(input_df[col], errors="ignore")
-
-        input_df = ensure_features(input_df, model)
+            try:
+                input_df[col] = pd.to_numeric(input_df[col])
+            except:
+                pass
+        trained_features = model.feature_names_in_
+        for col in trained_features:
+            if col not in input_df.columns:
+                input_df[col] = 0
+        input_df = input_df[trained_features]
         prediction = model.predict(input_df)[0]
         result = "Adherent" if prediction == 1 else "Non-Adherent"
         show_toast(f"✅ Single prediction: {result}", "green")
         st.success(f"Prediction: {result}")
     except Exception as e:
+        show_toast("❌ Error during single prediction!", "red")
         st.error(f"Error during prediction: {e}")
 
 # === BATCH PREDICTION ===
-st.subheader("Batch Prediction on Dataset")
+st.subheader("Batch Prediction on Uploaded Dataset")
 if st.button("Run Batch Prediction"):
     try:
-        X_copy = encode_dataframe(X.copy())
-        X_copy = ensure_features(X_copy, model)
-
+        show_toast("Running batch prediction...", "#007bff")
+        X_copy = X.copy()
+        X_copy = encode_dataframe(X_copy)
+        trained_features = model.feature_names_in_
+        for col in trained_features:
+            if col not in X_copy.columns:
+                X_copy[col] = 0
+        X_copy = X_copy[trained_features]
         preds = model.predict(X_copy)
         data["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
-
+        show_toast("✅ Batch prediction completed successfully!", "green")
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
-
         alerts = check_missing_dosage(data)
         if not alerts.empty:
-            st.warning(f"{len(alerts)} patients missing doses or non-adherent!")
+            show_toast(f"⚠ {len(alerts)} patients missing doses or non-adherent!", "orange")
+            st.warning("### Patients Needing Attention")
             st.dataframe(alerts)
         else:
+            show_toast("✅ All patients are adherent!", "green")
             st.success("All patients are adherent and up-to-date on dosages!")
-
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
+        buffer.seek(0)
         st.download_button(
-            "Download Predictions as CSV",
-            buffer.getvalue(),
-            "patient_predictions.csv",
-            "text/csv"
+            label="Download Predictions as CSV",
+            data=buffer,
+            file_name="patient_predictions.csv",
+            mime="text/csv"
         )
     except Exception as e:
+        show_toast("❌ Error during batch prediction!", "red")
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
