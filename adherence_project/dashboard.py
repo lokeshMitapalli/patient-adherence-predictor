@@ -33,8 +33,8 @@ def show_toast(message, color="green"):
 
 def encode_dataframe(df):
     for col in df.columns:
-        if df[col].dtype == 'object':
-            df[col] = df[col].astype('category').cat.codes
+        if df[col].dtype == "object":
+            df[col] = df[col].astype("category").cat.codes
     return df
 
 def check_missing_dosage(df):
@@ -44,15 +44,24 @@ def check_missing_dosage(df):
                 (dosage == 0) | (follow_up.isna())]
     return alerts
 
-def load_model(path):
+def load_model(path_or_file):
     try:
-        return load(path)
+        # If path given
+        if isinstance(path_or_file, (str, os.PathLike)):
+            return load(path_or_file)
+        # If uploaded file (BytesIO)
+        else:
+            content = path_or_file.read()
+            return pickle.loads(content)
     except:
-        with open(path, "rb") as f:
-            return pickle.load(f)
+        if isinstance(path_or_file, (str, os.PathLike)):
+            with open(path_or_file, "rb") as f:
+                return pickle.load(f)
+        else:
+            path_or_file.seek(0)
+            return pickle.load(path_or_file)
 
 def ensure_features(df, model):
-    """Align dataset columns with model features"""
     trained_features = model.feature_names_in_
     for col in trained_features:
         if col not in df.columns:
@@ -158,4 +167,5 @@ if st.button("Run Batch Prediction"):
         )
     except Exception as e:
         st.error(f"Error during batch prediction: {e}")
+
 
