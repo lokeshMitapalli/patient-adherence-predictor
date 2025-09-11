@@ -42,12 +42,8 @@ def encode_dataframe(df):
 
 # === HELPER: Check missing dosages / non-adherence ===
 def check_missing_dosage(df):
-    # Ensure Follow_Up_Days exists as a Series
     follow_up = df["Follow_Up_Days"] if "Follow_Up_Days" in df.columns else pd.Series([None]*len(df))
-    
-    # Ensure Dosage_mg exists as a Series
     dosage = df["Dosage_mg"] if "Dosage_mg" in df.columns else pd.Series([0]*len(df))
-    
     alerts = df[(df["Predicted_Adherence"] == "Non-Adherent") |
                 (dosage == 0) |
                 (follow_up.isna())]
@@ -132,14 +128,12 @@ if st.sidebar.button("Predict"):
         input_df = pd.DataFrame([input_data])
         input_df = encode_dataframe(input_df)
 
-        # Convert numeric fields
         for col in input_df.columns:
             try:
                 input_df[col] = pd.to_numeric(input_df[col])
             except:
                 pass
 
-        # Align columns with model
         trained_features = model.feature_names_in_
         for col in trained_features:
             if col not in input_df.columns:
@@ -176,7 +170,6 @@ if st.button("Run Batch Prediction"):
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
 
-        # Alerts for patients missing dosages or non-adherent
         alerts = check_missing_dosage(data)
         if not alerts.empty:
             show_toast(f"⚠ {len(alerts)} patients missing doses or non-adherent!", color="orange")
@@ -186,7 +179,6 @@ if st.button("Run Batch Prediction"):
             show_toast("✅ All patients are adherent!", color="green")
             st.success("All patients are adherent and up-to-date on dosages!")
 
-        # Download full predictions
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
         buffer.seek(0)
@@ -200,4 +192,4 @@ if st.button("Run Batch Prediction"):
     except Exception as e:
         show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
-this is actual code
+
