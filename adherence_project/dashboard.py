@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 from joblib import load
-import pickle
 from io import BytesIO
 
 st.title("Patient Adherence Prediction Dashboard")
@@ -44,23 +43,6 @@ def check_missing_dosage(df):
                 (dosage == 0) | (follow_up.isna())]
     return alerts
 
-def load_model(path_or_file):
-    try:
-        # If path given
-        if isinstance(path_or_file, (str, os.PathLike)):
-            return load(path_or_file)
-        # If uploaded file (BytesIO)
-        else:
-            content = path_or_file.read()
-            return pickle.loads(content)
-    except:
-        if isinstance(path_or_file, (str, os.PathLike)):
-            with open(path_or_file, "rb") as f:
-                return pickle.load(f)
-        else:
-            path_or_file.seek(0)
-            return pickle.load(path_or_file)
-
 def ensure_features(df, model):
     trained_features = model.feature_names_in_
     for col in trained_features:
@@ -75,7 +57,7 @@ model = None
 if os.path.exists(model_path):
     st.info("Loading model from project folder...")
     try:
-        model = load_model(model_path)
+        model = load(model_path)   # ✅ Always use joblib.load
         show_toast("✅ Model loaded successfully!", "green")
     except Exception as e:
         st.error(f"Error loading model: {e}")
@@ -84,7 +66,10 @@ else:
     uploaded_model = st.file_uploader("Upload your model file (.pkl)", type=["pkl"])
     if uploaded_model:
         try:
-            model = load_model(uploaded_model)
+            temp_path = "uploaded_model.pkl"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_model.read())
+            model = load(temp_path)   # ✅ Reload with joblib
             show_toast("✅ Model uploaded successfully!", "green")
         except Exception as e:
             st.error(f"Error loading uploaded model: {e}")
@@ -167,6 +152,7 @@ if st.button("Run Batch Prediction"):
         )
     except Exception as e:
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
