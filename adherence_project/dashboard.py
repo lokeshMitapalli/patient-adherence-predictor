@@ -4,7 +4,7 @@ import os
 from joblib import load
 import pickle
 from io import BytesIO
-import matplotlib.pyplot as plt
+import plotly.express as px  # ✅ for pie charts
 
 st.set_page_config(page_title="Patient Adherence Dashboard", layout="wide")
 st.title("🩺 Patient Adherence Prediction Dashboard")
@@ -189,38 +189,27 @@ if st.button("Run Batch Prediction"):
 
         # === Graphs ===
         st.subheader("📈 Adherence Insights")
-        adherence_counts = data["Predicted_Adherence"].value_counts()
+        adherence_counts = data["Predicted_Adherence"].value_counts().reset_index()
+        adherence_counts.columns = ["Adherence", "Count"]
 
         # Bar chart
-        fig, ax = plt.subplots()
-        adherence_counts.plot(kind="bar", ax=ax, color=["#2ecc71", "#e74c3c"])
-        ax.set_title("Adherence vs Non-Adherence")
-        ax.set_ylabel("Number of Patients")
-        st.pyplot(fig)
+        st.bar_chart(adherence_counts.set_index("Adherence"))
 
-        # Pie chart
-        fig2, ax2 = plt.subplots()
-        adherence_counts.plot(kind="pie", autopct='%1.1f%%', startangle=90,
-                              colors=["#2ecc71", "#e74c3c"], ax=ax2)
-        ax2.set_ylabel("")
-        st.pyplot(fig2)
+        # Pie chart with Plotly
+        fig = px.pie(adherence_counts, names="Adherence", values="Count",
+                     color="Adherence", color_discrete_map={"Adherent": "green", "Non-Adherent": "red"})
+        st.plotly_chart(fig, use_container_width=True)
 
         # Dosage & Follow-Up Trends
         if "Dosage_mg" in data.columns:
             st.subheader("💊 Average Dosage by Adherence")
-            avg_dosage = data.groupby("Predicted_Adherence")["Dosage_mg"].mean()
-            fig3, ax3 = plt.subplots()
-            avg_dosage.plot(kind="bar", color=["#2ecc71", "#e74c3c"], ax=ax3)
-            ax3.set_ylabel("Average Dosage (mg)")
-            st.pyplot(fig3)
+            avg_dosage = data.groupby("Predicted_Adherence")["Dosage_mg"].mean().reset_index()
+            st.bar_chart(avg_dosage.set_index("Predicted_Adherence"))
 
         if "Follow_Up_Days" in data.columns:
             st.subheader("📅 Average Follow-Up Days by Adherence")
-            avg_followup = data.groupby("Predicted_Adherence")["Follow_Up_Days"].mean()
-            fig4, ax4 = plt.subplots()
-            avg_followup.plot(kind="bar", color=["#3498db", "#e67e22"], ax=ax4)
-            ax4.set_ylabel("Average Follow-Up Days")
-            st.pyplot(fig4)
+            avg_followup = data.groupby("Predicted_Adherence")["Follow_Up_Days"].mean().reset_index()
+            st.bar_chart(avg_followup.set_index("Predicted_Adherence"))
 
         # === Alerts ===
         if not alerts.empty:
@@ -228,16 +217,13 @@ if st.button("Run Batch Prediction"):
             st.warning("### ⚠ Patients Needing Attention")
             st.dataframe(alerts)
 
-            # Risk Pie
+            # Risk Pie with Plotly
             st.subheader("⚠ Risk Overview")
-            safe_patients = total_patients - alerts_count
-            risk_data = pd.Series({"At-Risk": alerts_count, "Safe": safe_patients})
-
-            fig5, ax5 = plt.subplots()
-            risk_data.plot(kind="pie", autopct='%1.1f%%', startangle=90,
-                           colors=["#e67e22", "#2ecc71"], ax=ax5)
-            ax5.set_ylabel("")
-            st.pyplot(fig5)
+            risk_data = pd.DataFrame({"Status": ["At-Risk", "Safe"], 
+                                      "Count": [alerts_count, total_patients - alerts_count]})
+            fig2 = px.pie(risk_data, names="Status", values="Count",
+                          color="Status", color_discrete_map={"At-Risk": "orange", "Safe": "green"})
+            st.plotly_chart(fig2, use_container_width=True)
         else:
             show_toast("✅ All patients are adherent!", color="green")
             st.success("All patients are adherent and up-to-date on dosages!")
