@@ -4,6 +4,8 @@ import os
 from joblib import load
 import pickle
 from io import BytesIO
+import smtplib
+from email.mime.text import MIMEText
 
 st.title("Patient Adherence Prediction Dashboard")
 
@@ -48,6 +50,22 @@ def check_missing_dosage(df):
                 (dosage == 0) |
                 (follow_up.isna())]
     return alerts
+
+# === HELPER: Send Email Alert ===
+def send_email_alert(patient_id, recipient_email):
+    msg = MIMEText(f"⚠ Alert: Patient {patient_id} is NON-ADHERENT. Please follow up immediately.")
+    msg["Subject"] = "🚨 Non-Adherence Alert"
+    msg["From"] = "your_email@gmail.com"  # Replace with your Gmail
+    msg["To"] = recipient_email
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login("your_email@gmail.com", "your_app_password")  # Use App Password
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        st.error(f"Email sending failed: {e}")
+        return False
 
 # === MODEL LOADING ===
 model = None
@@ -170,40 +188,40 @@ if st.button("Run Batch Prediction"):
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
 
-        # === 📊 Enhanced Dashboard Visualizations (Streamlit only) ===
+        # === 📊 Adherence Overview ===
         if "Predicted_Adherence" in data.columns:
             st.subheader("📊 Adherence Overview")
 
             adherence_counts = data["Predicted_Adherence"].value_counts()
-
-            # ✅ Bar chart (Counts)
             st.write("### Adherence Count")
             st.bar_chart(adherence_counts)
 
-            # ✅ Ratio (percentages table + area chart)
             st.write("### Adherence Ratio")
             ratio_df = (adherence_counts / adherence_counts.sum() * 100).reset_index()
             ratio_df.columns = ["Adherence_Status", "Percentage"]
-
             st.dataframe(ratio_df)
             st.area_chart(ratio_df.set_index("Adherence_Status"))
 
-            # ✅ Alerts visualization
-            st.subheader("⚠️ Patients Needing Attention")
-            alerts = check_missing_dosage(data)
+            # === ⚠️ Non-Adherent Alerts ===
+            non_adherent = data[data["Predicted_Adherence"] == "Non-Adherent"]
 
-            if not alerts.empty:
-                alert_counts = alerts["Predicted_Adherence"].value_counts()
-                st.bar_chart(alert_counts)
-                st.warning(f"{len(alerts)} patients require attention (missing doses or non-adherent).")
-                st.dataframe(alerts)
+            if not non_adherent.empty:
+                st.error(f"⚠ {len(non_adherent)} NON-ADHERENT patients found!")
+                st.dataframe(non_adherent)
+
+                recipient = st.text_input("Doctor Email", "doctor@example.com")
+                if st.button("Send Email Alerts"):
+                    for _, row in non_adherent.iterrows():
+                        patient_id = row.get("Patient_ID", "Unknown")
+                        send_email_alert(patient_id, recipient)
+                    st.success("✅ Email alerts sent successfully!")
             else:
                 st.success("All patients are adherent and up-to-date on dosages!")
 
+        # === Download predictions ===
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
         buffer.seek(0)
-
         st.download_button(
             label="Download Predictions as CSV",
             data=buffer,
