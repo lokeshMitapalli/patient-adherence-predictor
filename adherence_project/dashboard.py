@@ -60,7 +60,7 @@ def send_email_alert(patient_id, recipient_email):
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login("your_email@gmail.com", "your_app_password")  # Use App Password
+            server.login("mittapallilokeswarreddy10@gmail.com", "loki10042005")  # Use App Password
             server.send_message(msg)
         return True
     except Exception as e:
