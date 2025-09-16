@@ -4,10 +4,8 @@ import os
 from joblib import load
 import pickle
 from io import BytesIO
-import plotly.express as px  # ✅ for pie charts
 
-st.set_page_config(page_title="Patient Adherence Dashboard", layout="wide")
-st.title("🩺 Patient Adherence Prediction Dashboard")
+st.title("Patient Adherence Prediction Dashboard")
 
 # === HELPER: Toast Notifications ===
 def show_toast(message, color="green"):
@@ -90,7 +88,7 @@ if model is None:
     st.stop()
 
 # === DATASET UPLOAD ===
-st.sidebar.header("📂 Upload Your Dataset")
+st.sidebar.header("Upload Your Dataset (CSV)")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
 
 if uploaded_file:
@@ -119,7 +117,7 @@ else:
 X = data.drop(columns=["Adherence"], errors='ignore')
 
 # === SINGLE PREDICTION ===
-st.sidebar.header("🔮 Make a Single Prediction")
+st.sidebar.header("Make a Single Prediction")
 input_data = {}
 for col in X.columns:
     value = st.sidebar.text_input(f"Enter {col}")
@@ -151,7 +149,7 @@ if st.sidebar.button("Predict"):
         st.error(f"Error during prediction: {e}")
 
 # === BATCH PREDICTION ===
-st.subheader("📊 Batch Prediction on Dataset")
+st.subheader("Batch Prediction on Uploaded Dataset")
 if st.button("Run Batch Prediction"):
     try:
         show_toast("Running batch prediction...", color="#007bff")
@@ -172,69 +170,42 @@ if st.button("Run Batch Prediction"):
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
 
-        # === KPIs ===
-        st.markdown("### 📌 Key Metrics")
-        col1, col2, col3, col4 = st.columns(4)
+        # === 📊 Enhanced Dashboard Visualizations (Streamlit only) ===
+        if "Predicted_Adherence" in data.columns:
+            st.subheader("📊 Adherence Overview")
 
-        total_patients = len(data)
-        adherent_count = (data["Predicted_Adherence"] == "Adherent").sum()
-        non_adherent_count = (data["Predicted_Adherence"] == "Non-Adherent").sum()
-        alerts = check_missing_dosage(data)
-        alerts_count = len(alerts)
+            adherence_counts = data["Predicted_Adherence"].value_counts()
 
-        col1.metric("Total Patients", total_patients)
-        col2.metric("Adherent", adherent_count)
-        col3.metric("Non-Adherent", non_adherent_count)
-        col4.metric("⚠ At-Risk", alerts_count)
+            # ✅ Bar chart (Counts)
+            st.write("### Adherence Count")
+            st.bar_chart(adherence_counts)
 
-        # === Graphs ===
-        st.subheader("📈 Adherence Insights")
-        adherence_counts = data["Predicted_Adherence"].value_counts().reset_index()
-        adherence_counts.columns = ["Adherence", "Count"]
+            # ✅ Ratio (percentages table + area chart)
+            st.write("### Adherence Ratio")
+            ratio_df = (adherence_counts / adherence_counts.sum() * 100).reset_index()
+            ratio_df.columns = ["Adherence_Status", "Percentage"]
 
-        # Bar chart
-        st.bar_chart(adherence_counts.set_index("Adherence"))
+            st.dataframe(ratio_df)
+            st.area_chart(ratio_df.set_index("Adherence_Status"))
 
-        # Pie chart with Plotly
-        fig = px.pie(adherence_counts, names="Adherence", values="Count",
-                     color="Adherence", color_discrete_map={"Adherent": "green", "Non-Adherent": "red"})
-        st.plotly_chart(fig, use_container_width=True)
+            # ✅ Alerts visualization
+            st.subheader("⚠️ Patients Needing Attention")
+            alerts = check_missing_dosage(data)
 
-        # Dosage & Follow-Up Trends
-        if "Dosage_mg" in data.columns:
-            st.subheader("💊 Average Dosage by Adherence")
-            avg_dosage = data.groupby("Predicted_Adherence")["Dosage_mg"].mean().reset_index()
-            st.bar_chart(avg_dosage.set_index("Predicted_Adherence"))
+            if not alerts.empty:
+                alert_counts = alerts["Predicted_Adherence"].value_counts()
+                st.bar_chart(alert_counts)
+                st.warning(f"{len(alerts)} patients require attention (missing doses or non-adherent).")
+                st.dataframe(alerts)
+            else:
+                st.success("All patients are adherent and up-to-date on dosages!")
 
-        if "Follow_Up_Days" in data.columns:
-            st.subheader("📅 Average Follow-Up Days by Adherence")
-            avg_followup = data.groupby("Predicted_Adherence")["Follow_Up_Days"].mean().reset_index()
-            st.bar_chart(avg_followup.set_index("Predicted_Adherence"))
-
-        # === Alerts ===
-        if not alerts.empty:
-            show_toast(f"⚠ {len(alerts)} patients missing doses or non-adherent!", color="orange")
-            st.warning("### ⚠ Patients Needing Attention")
-            st.dataframe(alerts)
-
-            # Risk Pie with Plotly
-            st.subheader("⚠ Risk Overview")
-            risk_data = pd.DataFrame({"Status": ["At-Risk", "Safe"], 
-                                      "Count": [alerts_count, total_patients - alerts_count]})
-            fig2 = px.pie(risk_data, names="Status", values="Count",
-                          color="Status", color_discrete_map={"At-Risk": "orange", "Safe": "green"})
-            st.plotly_chart(fig2, use_container_width=True)
-        else:
-            show_toast("✅ All patients are adherent!", color="green")
-            st.success("All patients are adherent and up-to-date on dosages!")
-
-        # === Download button ===
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
         buffer.seek(0)
 
         st.download_button(
-            label="💾 Download Predictions as CSV",
+            label="Download Predictions as CSV",
             data=buffer,
             file_name="patient_predictions.csv",
             mime="text/csv"
