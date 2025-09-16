@@ -4,8 +4,10 @@ import os
 from joblib import load
 import pickle
 from io import BytesIO
+import matplotlib.pyplot as plt
 
-st.title("Patient Adherence Prediction Dashboard")
+st.set_page_config(page_title="Patient Adherence Dashboard", layout="wide")
+st.title("🩺 Patient Adherence Prediction Dashboard")
 
 # === HELPER: Toast Notifications ===
 def show_toast(message, color="green"):
@@ -88,7 +90,7 @@ if model is None:
     st.stop()
 
 # === DATASET UPLOAD ===
-st.sidebar.header("Upload Your Dataset (CSV)")
+st.sidebar.header("📂 Upload Your Dataset")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
 
 if uploaded_file:
@@ -117,7 +119,7 @@ else:
 X = data.drop(columns=["Adherence"], errors='ignore')
 
 # === SINGLE PREDICTION ===
-st.sidebar.header("Make a Single Prediction")
+st.sidebar.header("🔮 Make a Single Prediction")
 input_data = {}
 for col in X.columns:
     value = st.sidebar.text_input(f"Enter {col}")
@@ -149,7 +151,7 @@ if st.sidebar.button("Predict"):
         st.error(f"Error during prediction: {e}")
 
 # === BATCH PREDICTION ===
-st.subheader("Batch Prediction on Uploaded Dataset")
+st.subheader("📊 Batch Prediction on Dataset")
 if st.button("Run Batch Prediction"):
     try:
         show_toast("Running batch prediction...", color="#007bff")
@@ -170,21 +172,83 @@ if st.button("Run Batch Prediction"):
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
 
+        # === KPIs ===
+        st.markdown("### 📌 Key Metrics")
+        col1, col2, col3, col4 = st.columns(4)
+
+        total_patients = len(data)
+        adherent_count = (data["Predicted_Adherence"] == "Adherent").sum()
+        non_adherent_count = (data["Predicted_Adherence"] == "Non-Adherent").sum()
         alerts = check_missing_dosage(data)
+        alerts_count = len(alerts)
+
+        col1.metric("Total Patients", total_patients)
+        col2.metric("Adherent", adherent_count)
+        col3.metric("Non-Adherent", non_adherent_count)
+        col4.metric("⚠ At-Risk", alerts_count)
+
+        # === Graphs ===
+        st.subheader("📈 Adherence Insights")
+        adherence_counts = data["Predicted_Adherence"].value_counts()
+
+        # Bar chart
+        fig, ax = plt.subplots()
+        adherence_counts.plot(kind="bar", ax=ax, color=["#2ecc71", "#e74c3c"])
+        ax.set_title("Adherence vs Non-Adherence")
+        ax.set_ylabel("Number of Patients")
+        st.pyplot(fig)
+
+        # Pie chart
+        fig2, ax2 = plt.subplots()
+        adherence_counts.plot(kind="pie", autopct='%1.1f%%', startangle=90,
+                              colors=["#2ecc71", "#e74c3c"], ax=ax2)
+        ax2.set_ylabel("")
+        st.pyplot(fig2)
+
+        # Dosage & Follow-Up Trends
+        if "Dosage_mg" in data.columns:
+            st.subheader("💊 Average Dosage by Adherence")
+            avg_dosage = data.groupby("Predicted_Adherence")["Dosage_mg"].mean()
+            fig3, ax3 = plt.subplots()
+            avg_dosage.plot(kind="bar", color=["#2ecc71", "#e74c3c"], ax=ax3)
+            ax3.set_ylabel("Average Dosage (mg)")
+            st.pyplot(fig3)
+
+        if "Follow_Up_Days" in data.columns:
+            st.subheader("📅 Average Follow-Up Days by Adherence")
+            avg_followup = data.groupby("Predicted_Adherence")["Follow_Up_Days"].mean()
+            fig4, ax4 = plt.subplots()
+            avg_followup.plot(kind="bar", color=["#3498db", "#e67e22"], ax=ax4)
+            ax4.set_ylabel("Average Follow-Up Days")
+            st.pyplot(fig4)
+
+        # === Alerts ===
         if not alerts.empty:
             show_toast(f"⚠ {len(alerts)} patients missing doses or non-adherent!", color="orange")
-            st.warning("### Patients Needing Attention")
+            st.warning("### ⚠ Patients Needing Attention")
             st.dataframe(alerts)
+
+            # Risk Pie
+            st.subheader("⚠ Risk Overview")
+            safe_patients = total_patients - alerts_count
+            risk_data = pd.Series({"At-Risk": alerts_count, "Safe": safe_patients})
+
+            fig5, ax5 = plt.subplots()
+            risk_data.plot(kind="pie", autopct='%1.1f%%', startangle=90,
+                           colors=["#e67e22", "#2ecc71"], ax=ax5)
+            ax5.set_ylabel("")
+            st.pyplot(fig5)
         else:
             show_toast("✅ All patients are adherent!", color="green")
             st.success("All patients are adherent and up-to-date on dosages!")
 
+        # === Download button ===
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
         buffer.seek(0)
 
         st.download_button(
-            label="Download Predictions as CSV",
+            label="💾 Download Predictions as CSV",
             data=buffer,
             file_name="patient_predictions.csv",
             mime="text/csv"
@@ -192,4 +256,3 @@ if st.button("Run Batch Prediction"):
     except Exception as e:
         show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
-
