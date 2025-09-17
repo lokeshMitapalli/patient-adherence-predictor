@@ -10,13 +10,20 @@ st.title("📊 Patient Adherence Prediction Dashboard")
 
 # === PATH FOR MODEL ===
 model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
+model = None
 
-# === LOAD OR TRAIN MODEL ===
+# === TRY TO LOAD MODEL ===
 if os.path.exists(model_path):
-    st.info("✅ Loading pre-trained model...")
-    model = joblib.load(model_path)
-else:
-    st.warning("⚠ No model found. Training a new model from dataset...")
+    try:
+        st.info("✅ Loading pre-trained model...")
+        model = joblib.load(model_path)
+    except Exception as e:
+        st.error(f"⚠ Model file is corrupted: {e}")
+        model = None
+
+# === TRAIN IF NO MODEL ===
+if model is None:
+    st.warning("⚠ No valid model found. Training a new one from dataset...")
 
     dataset_path = os.path.join(os.path.dirname(__file__), "patient_adherence_dataset.csv")
     if os.path.exists(dataset_path):
@@ -37,14 +44,13 @@ else:
         # Train/test split
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # Train model
+        # Train Random Forest
         model = RandomForestClassifier(random_state=42)
         model.fit(X_train, y_train)
 
         # Save model
         joblib.dump(model, model_path)
 
-        # Show accuracy
         acc = accuracy_score(y_test, model.predict(X_test))
         st.success(f"✅ Model trained successfully! Accuracy: {acc:.2f}")
     else:
@@ -55,10 +61,7 @@ else:
 st.subheader("🔮 Single Patient Prediction")
 
 patient_input = {}
-if "data" in locals():
-    X_columns = [c for c in data.columns if c != "Adherence"]
-else:
-    X_columns = ["Age", "Gender", "Missed_Doses", "Refill_Gap_Days", "App_Usage"]
+X_columns = model.feature_names_in_
 
 for col in X_columns:
     patient_input[col] = st.text_input(f"Enter {col}")
@@ -70,7 +73,7 @@ if st.button("Predict"):
     for col in input_df.select_dtypes(include="object").columns:
         input_df[col] = input_df[col].astype("category").cat.codes
 
-    # Match training features
+    # Ensure all columns exist
     for col in model.feature_names_in_:
         if col not in input_df.columns:
             input_df[col] = 0
@@ -102,5 +105,6 @@ if uploaded_file:
 
     st.write("### Predictions", batch_data)
     st.download_button("Download Predictions", batch_data.to_csv(index=False), "predictions.csv", "text/csv")
+
 
 
