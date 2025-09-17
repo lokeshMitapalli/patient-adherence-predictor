@@ -5,8 +5,6 @@ from io import BytesIO
 import base64
 import smtplib
 from email.mime.text import MIMEText
-from sklearn.ensemble import RandomForestClassifier
-import numpy as np
 
 st.title("Patient Adherence Prediction Dashboard")
 
@@ -53,19 +51,16 @@ def send_email_alert(patient_id, recipient_email):
         st.error(f"Email sending failed: {e}")
         return False
 
-from sklearn.datasets import make_classification
-X_synth, y_synth = make_classification(n_samples=50, n_features=5, n_informative=3, n_classes=2, random_state=42)
-feature_names = [f"Feature_{i}" for i in range(X_synth.shape[1])]
-df_synth = pd.DataFrame(X_synth, columns=feature_names)
-y_synth = pd.Series(y_synth, name="Adherence")
-rf_model = RandomForestClassifier(random_state=42)
-rf_model.fit(df_synth, y_synth)
-rf_model.feature_names_in_ = np.array(feature_names)
-model_bytes = pickle.dumps(rf_model)
-model_base64 = base64.b64encode(model_bytes).decode("utf-8")
+# ----------------- EMBED YOUR REAL MODEL -----------------
+# Step 1: Convert your actual model.pkl to base64 (see instructions below)
+# Step 2: Paste the base64 string inside the triple quotes
+model_base64 = """
+<PASTE-YOUR-REAL-MODEL-BASE64-HERE>
+"""
 model = pickle.loads(base64.b64decode(model_base64))
 show_toast("✅ Embedded model loaded successfully!", color="green")
 
+# ----------------- DATASET UPLOAD / DEFAULT -----------------
 st.sidebar.header("Upload Your Dataset (CSV)")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
 
@@ -75,9 +70,15 @@ if uploaded_file:
     st.write("### Uploaded Dataset Preview")
     st.dataframe(data.head())
 else:
-    data = pd.DataFrame(columns=model.feature_names_in_)
-    st.write("### Using empty dataset template")
-    st.dataframe(data.head())
+    default_path = 'patient_adherence_dataset.csv'
+    if os.path.exists(default_path):
+        data = pd.read_csv(default_path)
+        st.write("### Default Dataset Preview")
+        st.dataframe(data.head())
+    else:
+        data = pd.DataFrame(columns=model.feature_names_in_)
+        st.write("### Using empty dataset template")
+        st.dataframe(data.head())
 
 if "Adherence" in data.columns:
     y = data["Adherence"].fillna("").apply(lambda x: 1 if str(x).strip().lower() == "adherent" else 0)
@@ -85,6 +86,7 @@ else:
     y = None
 X = data.drop(columns=["Adherence"], errors='ignore')
 
+# ----------------- SINGLE PREDICTION -----------------
 st.sidebar.header("Make a Single Prediction")
 input_data = {}
 for col in X.columns:
@@ -160,6 +162,7 @@ if st.button("Run Batch Prediction"):
     except Exception as e:
         show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
