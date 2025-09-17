@@ -5,7 +5,7 @@ import base64
 import zlib
 from sklearn.ensemble import RandomForestClassifier
 
-st.title("Patient Adherence Prediction Dashboard (Mini Example)")
+st.title("Patient Adherence Prediction Dashboard (Standalone Mini Example)")
 
 def show_toast(message, color="green"):
     toast_html = f"""
@@ -36,12 +36,12 @@ def encode_dataframe(df):
             df[col] = df[col].astype('category').cat.codes
     return df
 
-# ----------------- EMBEDDED MINI RANDOMFOREST -----------------
-# Real compressed and base64 encoded RandomForest trained on tiny dummy data
+# ----------------- EMBED YOUR BASE64 MODEL HERE -----------------
 compressed_model_base64 = """
-eJxjYGAEQgEBBiDJwZDByMHQDywMTIwMDAyMDQwMEUwgAJtEA7A==
+PASTE_YOUR_GENERATED_BASE64_STRING_HERE
 """
 
+# ----------------- MODEL LOADING -----------------
 model = None
 try:
     compressed_bytes = base64.b64decode(compressed_model_base64)
@@ -51,7 +51,7 @@ try:
         raise ValueError("Decoded object is not a valid trained model")
     show_toast("✅ Embedded mini model loaded successfully!", color="green")
 except Exception as e:
-    st.error(f"❌ Failed to load embedded model: {e}")
+    st.error(f"❌ Failed to load embedded model. Please make sure the base64 string is correct. Details: {e}")
     st.stop()
 
 # ----------------- EXAMPLE DATA -----------------
@@ -106,6 +106,7 @@ if st.button("Predict Batch"):
         st.bar_chart(adherence_counts)
     except Exception as e:
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
