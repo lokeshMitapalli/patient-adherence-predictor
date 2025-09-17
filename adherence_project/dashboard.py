@@ -9,11 +9,9 @@ from io import BytesIO
 
 st.title("📊 Patient Adherence Prediction Dashboard")
 
-# === PATH FOR MODEL ===
 model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
 model = None
 
-# === TRY TO LOAD MODEL ===
 if os.path.exists(model_path):
     try:
         st.info("✅ Loading pre-trained model...")
@@ -22,7 +20,6 @@ if os.path.exists(model_path):
         st.error(f"⚠ Model file is corrupted: {e}")
         model = None
 
-# === TRAIN IF NO MODEL ===
 if model is None:
     st.warning("⚠ No valid model found. Training a new one from dataset...")
 
@@ -53,7 +50,6 @@ if model is None:
         st.error("❌ No dataset found! Please upload patient_adherence_dataset.csv.")
         st.stop()
 
-# === SINGLE PREDICTION ===
 st.subheader("🔮 Single Patient Prediction")
 patient_input = {}
 X_columns = model.feature_names_in_
@@ -75,7 +71,6 @@ if st.button("Predict"):
     result = "Adherent ✅" if prediction == 1 else "Non-Adherent ❌"
     st.success(f"Prediction: {result}")
 
-# === BATCH PREDICTION ===
 st.subheader("📂 Batch Prediction")
 uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
 
@@ -96,7 +91,6 @@ if uploaded_file:
 
     st.write("### Predictions", batch_data)
 
-    # === 📊 Graphs & Ratios ===
     st.subheader("📊 Adherence Overview")
     adherence_counts = batch_data["Predicted_Adherence"].value_counts()
     st.bar_chart(adherence_counts)
@@ -106,7 +100,6 @@ if uploaded_file:
     st.write("### Adherence Ratios (%)")
     st.dataframe(ratio_df)
 
-    # === ⚠️ Alerts ===
     non_adherent = batch_data[batch_data["Predicted_Adherence"] == "Non-Adherent"]
     if not non_adherent.empty:
         st.error(f"⚠ {len(non_adherent)} NON-ADHERENT patients found!")
@@ -114,18 +107,17 @@ if uploaded_file:
     else:
         st.success("🎉 All patients are adherent!")
 
-    # === Download results ===
     buffer = BytesIO()
     batch_data.to_csv(buffer, index=False)
     buffer.seek(0)
+
     st.download_button(
         label="⬇ Download Predictions as CSV",
         data=buffer,
         file_name="patient_predictions.csv",
         mime="text/csv"
     )
-te("### Predictions", batch_data)
-    st.download_button("Download Predictions", batch_data.to_csv(index=False), "predictions.csv", "text/csv")
+
 
 
 
