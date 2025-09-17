@@ -6,7 +6,7 @@ import base64
 import zlib
 from sklearn.ensemble import RandomForestClassifier
 
-st.title("Patient Adherence Prediction Dashboard (Example)")
+st.title("Patient Adherence Prediction Dashboard (Mini Example)")
 
 def show_toast(message, color="green"):
     toast_html = f"""
@@ -39,8 +39,7 @@ def encode_dataframe(df):
 
 # ----------------- EMBEDDED MINI RANDOMFOREST -----------------
 compressed_model_base64 = """
-eNqNkMEOwjAMRff8iygTgqEXEiACOGvqpIgi4J9r9yG+eLOq5sl5x4Z0q1y7Ed9j6gkBySNTKkNQkbw
-bUg/mn3uKp4b4mT6X+QZt+MyHNEfnXg8/wHZvrsf
+eJxjYGAEQgEBBiDJwZDByMHQDywMTIwMDAyMDQwMEUwgAJtEA7A==
 """
 
 model = None
@@ -48,6 +47,8 @@ try:
     compressed_bytes = base64.b64decode(compressed_model_base64)
     model_bytes = zlib.decompress(compressed_bytes)
     model = pickle.loads(model_bytes)
+    if not hasattr(model, "predict") or not hasattr(model, "feature_names_in_"):
+        raise ValueError("Decoded object is not a valid trained model")
     show_toast("✅ Embedded mini model loaded successfully!", color="green")
 except Exception as e:
     st.error(f"❌ Failed to load embedded model: {e}")
@@ -55,18 +56,16 @@ except Exception as e:
 
 # ----------------- EXAMPLE DATA -----------------
 columns = model.feature_names_in_
-if st.button("Load Example Data"):
-    data = pd.DataFrame([
-        {"Age": 45, "Dosage_mg": 50, "Follow_Up_Days": 7},
-        {"Age": 60, "Dosage_mg": 0, "Follow_Up_Days": 10},
-        {"Age": 30, "Dosage_mg": 25, "Follow_Up_Days": 5},
-    ])
-    st.write("### Example Dataset")
-    st.dataframe(data)
-else:
-    data = pd.DataFrame(columns=columns)
+st.subheader("Example Dataset")
+example_data = pd.DataFrame([
+    {"Age": 25, "Dosage_mg": 10, "Follow_Up_Days": 5},
+    {"Age": 35, "Dosage_mg": 20, "Follow_Up_Days": 7},
+    {"Age": 45, "Dosage_mg": 0,  "Follow_Up_Days": 10},
+    {"Age": 55, "Dosage_mg": 50, "Follow_Up_Days": 3},
+])
+st.dataframe(example_data)
 
-X = data
+X = example_data.copy()
 
 # ----------------- SINGLE PREDICTION -----------------
 st.subheader("Single Prediction")
@@ -99,11 +98,15 @@ if st.button("Predict Batch"):
                 X_copy[col] = 0
         X_copy = X_copy[columns]
         preds = model.predict(X_copy)
-        data["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
+        X["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
         st.write("### Batch Predictions")
-        st.dataframe(data)
+        st.dataframe(X)
+        # Show summary chart
+        adherence_counts = X["Predicted_Adherence"].value_counts()
+        st.bar_chart(adherence_counts)
     except Exception as e:
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
