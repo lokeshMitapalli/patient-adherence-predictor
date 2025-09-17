@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 from joblib import load
-import pickle
 from io import BytesIO
 import smtplib
 from email.mime.text import MIMEText
@@ -42,15 +41,6 @@ def encode_dataframe(df):
             df[col] = df[col].astype('category').cat.codes
     return df
 
-# === HELPER: Check missing dosages / non-adherence ===
-def check_missing_dosage(df):
-    follow_up = df["Follow_Up_Days"] if "Follow_Up_Days" in df.columns else pd.Series([None]*len(df))
-    dosage = df["Dosage_mg"] if "Dosage_mg" in df.columns else pd.Series([0]*len(df))
-    alerts = df[(df["Predicted_Adherence"] == "Non-Adherent") |
-                (dosage == 0) |
-                (follow_up.isna())]
-    return alerts
-
 # === HELPER: Send Email Alert ===
 def send_email_alert(patient_id, recipient_email):
     msg = MIMEText(f"⚠ Alert: Patient {patient_id} is NON-ADHERENT. Please follow up immediately.")
@@ -67,42 +57,19 @@ def send_email_alert(patient_id, recipient_email):
         st.error(f"Email sending failed: {e}")
         return False
 
-# === MODEL LOADING ===
-model = None
-model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
-
+# === MODEL LOADING (ALWAYS LOCAL) ===
+model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
 if os.path.exists(model_path):
     st.info("Loading model from project folder...")
     try:
         model = load(model_path)
         show_toast("✅ Model loaded successfully!", color="green")
-    except:
-        try:
-            with open(model_path, 'rb') as f:
-                model = pickle.load(f)
-                show_toast("✅ Model loaded successfully!", color="green")
-        except Exception as e:
-            show_toast("❌ Error loading model!", color="red")
-            st.error(f"Error loading model: {e}")
-            model = None
-
-if model is None:
-    st.warning("No valid model found in project folder. Please upload your model file.")
-    uploaded_model = st.file_uploader("Upload your model file (.pkl)", type=["pkl"])
-    if uploaded_model:
-        try:
-            model = load(uploaded_model)
-            show_toast("✅ Model uploaded successfully!", color="green")
-        except:
-            try:
-                model = pickle.load(uploaded_model)
-                show_toast("✅ Model uploaded successfully!", color="green")
-            except Exception as e:
-                show_toast("❌ Error loading uploaded model!", color="red")
-                st.error(f"Error loading uploaded model: {e}")
-                model = None
-
-if model is None:
+    except Exception as e:
+        show_toast("❌ Error loading model!", color="red")
+        st.error(f"Error loading model: {e}")
+        st.stop()
+else:
+    st.error("❌ model.pkl not found in project folder! Please add it.")
     st.stop()
 
 # === DATASET UPLOAD ===
@@ -115,24 +82,23 @@ if uploaded_file:
     st.write("### Uploaded Dataset Preview")
     st.dataframe(data.head())
 else:
-    default_path = os.path.join(os.path.dirname(__file__), 'patient_adherence_dataset.csv')
+    default_path = os.path.join(os.path.dirname(__file__), "patient_adherence_dataset.csv")
     if os.path.exists(default_path):
         data = pd.read_csv(default_path)
         st.write("### Default Dataset Preview")
         st.dataframe(data.head())
     else:
-        show_toast("❌ No dataset found!", color="red")
-        st.error("No dataset found. Please upload a CSV file to continue.")
+        st.error("❌ No dataset found. Please upload a CSV file to continue.")
         st.stop()
 
 # === PROCESS DATA ===
 if "Adherence" in data.columns:
     y = data["Adherence"].fillna("").apply(lambda x: 1 if str(x).strip().lower() == "adherent" else 0)
 else:
-    st.warning("The dataset does not contain an 'Adherence' column. Predictions will be based on features only.")
     y = None
+    st.warning("The dataset does not contain an 'Adherence' column. Predictions will be based on features only.")
 
-X = data.drop(columns=["Adherence"], errors='ignore')
+X = data.drop(columns=["Adherence"], errors="ignore")
 
 # === SINGLE PREDICTION ===
 st.sidebar.header("Make a Single Prediction")
@@ -167,7 +133,7 @@ if st.sidebar.button("Predict"):
         st.error(f"Error during prediction: {e}")
 
 # === BATCH PREDICTION ===
-st.subheader("Batch Prediction on Uploaded Dataset")
+st.subheader("Batch Prediction on Dataset")
 if st.button("Run Batch Prediction"):
     try:
         show_toast("Running batch prediction...", color="#007bff")
@@ -188,21 +154,14 @@ if st.button("Run Batch Prediction"):
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
 
-        # === 📊 Adherence Overview ===
+        # 📊 Adherence Overview
         if "Predicted_Adherence" in data.columns:
             st.subheader("📊 Adherence Overview")
 
             adherence_counts = data["Predicted_Adherence"].value_counts()
-            st.write("### Adherence Count")
             st.bar_chart(adherence_counts)
 
-            st.write("### Adherence Ratio")
-            ratio_df = (adherence_counts / adherence_counts.sum() * 100).reset_index()
-            ratio_df.columns = ["Adherence_Status", "Percentage"]
-            st.dataframe(ratio_df)
-            st.area_chart(ratio_df.set_index("Adherence_Status"))
-
-            # === ⚠️ Non-Adherent Alerts ===
+            # ⚠ Non-Adherent Alerts
             non_adherent = data[data["Predicted_Adherence"] == "Non-Adherent"]
 
             if not non_adherent.empty:
@@ -218,7 +177,7 @@ if st.button("Run Batch Prediction"):
             else:
                 st.success("All patients are adherent and up-to-date on dosages!")
 
-        # === Download predictions ===
+        # Download predictions
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
         buffer.seek(0)
@@ -231,3 +190,4 @@ if st.button("Run Batch Prediction"):
     except Exception as e:
         show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
+
