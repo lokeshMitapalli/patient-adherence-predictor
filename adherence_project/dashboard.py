@@ -5,6 +5,7 @@ from io import BytesIO
 import base64
 import smtplib
 from email.mime.text import MIMEText
+import os
 
 st.title("Patient Adherence Prediction Dashboard")
 
@@ -51,24 +52,34 @@ def send_email_alert(patient_id, recipient_email):
         st.error(f"Email sending failed: {e}")
         return False
 
-# ----------------- EMBED YOUR REAL MODEL -----------------
-# Step 1: Convert your actual model.pkl to base64 (see instructions below)
-# Step 2: Paste the base64 string inside the triple quotes
+# ----------------- EMBEDDED MODEL -----------------
 model_base64 = """
 <PASTE-YOUR-REAL-MODEL-BASE64-HERE>
 """
-model = pickle.loads(base64.b64decode(model_base64))
-show_toast("✅ Embedded model loaded successfully!", color="green")
 
-# ----------------- DATASET UPLOAD / DEFAULT -----------------
+model = None
+try:
+    if model_base64.strip() == "":
+        raise ValueError("Base64 model string is empty.")
+    model = pickle.loads(base64.b64decode(model_base64))
+    show_toast("✅ Embedded model loaded successfully!", color="green")
+except Exception as e:
+    st.error(f"❌ Failed to load embedded model: {e}")
+    st.stop()
+
+# ----------------- DATASET UPLOAD -----------------
 st.sidebar.header("Upload Your Dataset (CSV)")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
 
 if uploaded_file:
-    data = pd.read_csv(uploaded_file)
-    show_toast("✅ Dataset uploaded successfully!", color="green")
-    st.write("### Uploaded Dataset Preview")
-    st.dataframe(data.head())
+    try:
+        data = pd.read_csv(uploaded_file)
+        show_toast("✅ Dataset uploaded successfully!", color="green")
+        st.write("### Uploaded Dataset Preview")
+        st.dataframe(data.head())
+    except Exception as e:
+        st.error(f"❌ Failed to read CSV: {e}")
+        st.stop()
 else:
     default_path = 'patient_adherence_dataset.csv'
     if os.path.exists(default_path):
@@ -84,6 +95,7 @@ if "Adherence" in data.columns:
     y = data["Adherence"].fillna("").apply(lambda x: 1 if str(x).strip().lower() == "adherent" else 0)
 else:
     y = None
+
 X = data.drop(columns=["Adherence"], errors='ignore')
 
 # ----------------- SINGLE PREDICTION -----------------
@@ -115,6 +127,7 @@ if st.sidebar.button("Predict"):
         show_toast("❌ Error during single prediction!", color="red")
         st.error(f"Error during prediction: {e}")
 
+# ----------------- BATCH PREDICTION -----------------
 st.subheader("Batch Prediction on Uploaded Dataset")
 if st.button("Run Batch Prediction"):
     try:
@@ -162,6 +175,7 @@ if st.button("Run Batch Prediction"):
     except Exception as e:
         show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
