@@ -52,19 +52,24 @@ def send_email_alert(patient_id, recipient_email):
         st.error(f"Email sending failed: {e}")
         return False
 
-# ----------------- EMBEDDED MODEL -----------------
+# ----------------- EMBEDDED MODEL WITH VALIDATION -----------------
 model_base64 = """
 <PASTE-YOUR-REAL-MODEL-BASE64-HERE>
 """
 
 model = None
 try:
-    if model_base64.strip() == "":
-        raise ValueError("Base64 model string is empty.")
-    model = pickle.loads(base64.b64decode(model_base64))
-    show_toast("✅ Embedded model loaded successfully!", color="green")
+    if not model_base64.strip():
+        raise ValueError("The embedded model base64 string is empty.")
+    try:
+        model = pickle.loads(base64.b64decode(model_base64))
+        if not hasattr(model, "predict") or not hasattr(model, "feature_names_in_"):
+            raise ValueError("The decoded object is not a valid trained model.")
+        show_toast("✅ Embedded model loaded successfully!", color="green")
+    except Exception as inner:
+        raise ValueError(f"Failed to decode or load the embedded model: {inner}")
 except Exception as e:
-    st.error(f"❌ Failed to load embedded model: {e}")
+    st.error(f"❌ Embedded model could not be loaded.\nDetails: {e}\nPlease make sure the base64 string is correct.")
     st.stop()
 
 # ----------------- DATASET UPLOAD -----------------
@@ -175,6 +180,7 @@ if st.button("Run Batch Prediction"):
     except Exception as e:
         show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
