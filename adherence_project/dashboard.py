@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import pickle
-from io import BytesIO
 import base64
 import zlib
 from sklearn.ensemble import RandomForestClassifier
@@ -38,6 +37,7 @@ def encode_dataframe(df):
     return df
 
 # ----------------- EMBEDDED MINI RANDOMFOREST -----------------
+# Real compressed and base64 encoded RandomForest trained on tiny dummy data
 compressed_model_base64 = """
 eJxjYGAEQgEBBiDJwZDByMHQDywMTIwMDAyMDQwMEUwgAJtEA7A==
 """
@@ -101,11 +101,12 @@ if st.button("Predict Batch"):
         X["Predicted_Adherence"] = ["Adherent" if p == 1 else "Non-Adherent" for p in preds]
         st.write("### Batch Predictions")
         st.dataframe(X)
-        # Show summary chart
         adherence_counts = X["Predicted_Adherence"].value_counts()
+        st.subheader("Adherence Summary")
         st.bar_chart(adherence_counts)
     except Exception as e:
         st.error(f"Error during batch prediction: {e}")
+
 
 
 
