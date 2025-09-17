@@ -9,9 +9,6 @@ from email.mime.text import MIMEText
 
 st.title("Patient Adherence Prediction Dashboard")
 
-# === HELPER: Toast Notifications ===
-
-
 def show_toast(message, color="green"):
     toast_html = f"""
     <div style="
@@ -37,14 +34,12 @@ def show_toast(message, color="green"):
     """
     st.markdown(toast_html, unsafe_allow_html=True)
 
-# === HELPER: Encode categorical columns ===
 def encode_dataframe(df):
     for col in df.columns:
         if df[col].dtype == 'object':
             df[col] = df[col].astype('category').cat.codes
     return df
 
-# === HELPER: Check missing dosages / non-adherence ===
 def check_missing_dosage(df):
     follow_up = df["Follow_Up_Days"] if "Follow_Up_Days" in df.columns else pd.Series([None]*len(df))
     dosage = df["Dosage_mg"] if "Dosage_mg" in df.columns else pd.Series([0]*len(df))
@@ -53,7 +48,6 @@ def check_missing_dosage(df):
                 (follow_up.isna())]
     return alerts
 
-# === HELPER: Send Email Alert ===
 def send_email_alert(patient_id, recipient_email):
     msg = MIMEText(f"⚠ Alert: Patient {patient_id} is NON-ADHERENT. Please follow up immediately.")
     msg["Subject"] = "🚨 Non-Adherence Alert"
@@ -69,7 +63,7 @@ def send_email_alert(patient_id, recipient_email):
         st.error(f"Email sending failed: {e}")
         return False
 
-# === MODEL LOADING ===
+
 model = None
 model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
 
@@ -107,7 +101,6 @@ if model is None:
 if model is None:
     st.stop()
 
-# === DATASET UPLOAD ===
 st.sidebar.header("Upload Your Dataset (CSV)")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type=["csv"])
 
@@ -127,7 +120,6 @@ else:
         st.error("No dataset found. Please upload a CSV file to continue.")
         st.stop()
 
-# === PROCESS DATA ===
 if "Adherence" in data.columns:
     y = data["Adherence"].fillna("").apply(lambda x: 1 if str(x).strip().lower() == "adherent" else 0)
 else:
@@ -136,7 +128,6 @@ else:
 
 X = data.drop(columns=["Adherence"], errors='ignore')
 
-# === SINGLE PREDICTION ===
 st.sidebar.header("Make a Single Prediction")
 input_data = {}
 for col in X.columns:
@@ -168,7 +159,6 @@ if st.sidebar.button("Predict"):
         show_toast("❌ Error during single prediction!", color="red")
         st.error(f"Error during prediction: {e}")
 
-# === BATCH PREDICTION ===
 st.subheader("Batch Prediction on Uploaded Dataset")
 if st.button("Run Batch Prediction"):
     try:
@@ -189,8 +179,7 @@ if st.button("Run Batch Prediction"):
         show_toast("✅ Batch prediction completed successfully!", color="green")
         st.write("### Full Dataset with Predictions")
         st.dataframe(data)
-
-        # === 📊 Adherence Overview ===
+        
         if "Predicted_Adherence" in data.columns:
             st.subheader("📊 Adherence Overview")
 
@@ -203,8 +192,7 @@ if st.button("Run Batch Prediction"):
             ratio_df.columns = ["Adherence_Status", "Percentage"]
             st.dataframe(ratio_df)
             st.area_chart(ratio_df.set_index("Adherence_Status"))
-
-            # === ⚠️ Non-Adherent Alerts ===
+            
             non_adherent = data[data["Predicted_Adherence"] == "Non-Adherent"]
 
             if not non_adherent.empty:
@@ -220,7 +208,7 @@ if st.button("Run Batch Prediction"):
             else:
                 st.success("All patients are adherent and up-to-date on dosages!")
 
-        # === Download predictions ===
+       
         buffer = BytesIO()
         data.to_csv(buffer, index=False)
         buffer.seek(0)
@@ -233,9 +221,9 @@ if st.button("Run Batch Prediction"):
     except Exception as e:
         show_toast("❌ Error during batch prediction!", color="red")
         st.error(f"Error during batch prediction: {e}")
-include model.pkl directly
 
-i need this itself with inbuild model.pkl file
+
+
 
 
 
